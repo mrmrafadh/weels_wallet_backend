@@ -16,4 +16,9 @@ class Wallet extends Model
         'cash_on_hand', 
         'earnings'
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

@@ -37,3 +37,13 @@ Route::post('/find-rider', function (Request $request) {
     }
     return response()->json($user);
 });
+
+// 2. NEW ROUTE: Get Negative Wallets
+Route::get('/negative-wallets', function () {
+    // Find wallets with balance <= 0 and get their owner details
+    $wallets = Wallet::where('balance', '<=', 0)
+        ->with('user') // Ensure Wallet model has 'public function user() { return $this->belongsTo(User::class); }'
+        ->get();
+        
+    return response()->json($wallets);
+});
