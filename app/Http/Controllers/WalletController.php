@@ -75,9 +75,25 @@ class WalletController extends Controller
             $riderWallet = Wallet::where('user_id', $request->rider_id)->first();
             $adminWallet = Wallet::where('user_id', $request->admin_id)->first();
 
-            if (!$riderWallet || $riderWallet->balance < $request->amount) {
-                return response()->json(['error' => 'Insufficient balance'], 400);
+            if (!$riderWallet) {
+                return response()->json(['error' => 'Rider wallet not found'], 404);
             }
+
+            // --- CHANGED LOGIC START ---
+            
+            // Check if balance is sufficient
+            if ($riderWallet->balance < $request->amount) {
+                // If "force" is NOT true, stop and ask for confirmation
+                if (!$request->force) {
+                    return response()->json([
+                        'error' => 'CONFIRM_LOW_BALANCE', // Special code for Flutter to detect
+                        'message' => "Insufficient balance (Current: \${$riderWallet->balance}). Continue anyway?"
+                    ], 409); // 409 Conflict status
+                }
+            }
+            
+            // --- CHANGED LOGIC END ---
+
             if (!$adminWallet) $adminWallet = $this->createEmptyWallet($request->admin_id);
 
             $riderWallet->decrement('balance', $request->amount);
