@@ -22,10 +22,12 @@ Route::post('/withdraw', [WalletController::class, 'withdrawEarnings']);
 // Add this line inside your routes
 // routes/api.php
 
+// 1. UPDATED SEARCH: Include Wallet info
 Route::post('/find-rider', function (Request $request) {
-    $query = $request->query_input; // We will send 'query_input' from Flutter
+    $query = $request->query_input;
 
-    $user = App\Models\User::where('role', 'rider')
+    // Use 'with('wallet')' to attach wallet data to the user
+    $user = User::with('wallet')->where('role', 'rider')
         ->where(function($q) use ($query) {
             $q->where('mobile', $query)
               ->orWhere('name', 'like', "%{$query}%")
