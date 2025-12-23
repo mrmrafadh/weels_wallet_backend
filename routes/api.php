@@ -54,3 +54,12 @@ Route::get('/negative-wallets', function () {
         
     return response()->json($wallets);
 });
+
+Route::post('/update-fcm', function (Request $request) {
+    $user = User::find($request->user_id);
+    if ($user) {
+        $user->fcm_token = $request->token;
+        $user->save();
+        return response()->json(['message' => 'Token updated']);
+    }
+});
