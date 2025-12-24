@@ -9,7 +9,7 @@ class Transaction extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['wallet_id', 'amount', 'type', 'description', 'admin_id'];
+    protected $fillable = ['wallet_id', 'amount', 'type', 'description', 'admin_id', 'balance_after'];
 
     // Link to the Wallet (to get the Rider)
     public function wallet()
