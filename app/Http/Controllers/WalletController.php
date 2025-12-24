@@ -204,13 +204,24 @@ class WalletController extends Controller
     }
 
     // Helper: Send Notification
+    // Helper: Send Notification (Safe wrapper)
     private function sendNotification($userId, $title, $body) {
-        $user = User::find($userId);
-        if ($user && $user->fcm_token) {
-            try {
-                $notify = new \App\Services\NotificationService();
-                $notify->send($user->fcm_token, $title, $body);
-            } catch (\Exception $e) { }
+        // If you haven't created the NotificationService file yet, this line causes the crash.
+        // We will wrap it in a generic try/catch to stop the crash.
+        
+        try {
+            $user = User::find($userId);
+            if ($user && $user->fcm_token) {
+                // Check if class exists before using it, or catch the Throwable error
+                if (class_exists(\App\Services\NotificationService::class)) {
+                    $notify = new \App\Services\NotificationService();
+                    $notify->send($user->fcm_token, $title, $body);
+                }
+            }
+        } catch (\Throwable $e) { 
+            // <--- CRITICAL CHANGE: Use \Throwable instead of \Exception
+            // \Throwable catches "Class Not Found" fatal errors.
+            // Do nothing, just let the transaction succeed.
         }
     }
 }
