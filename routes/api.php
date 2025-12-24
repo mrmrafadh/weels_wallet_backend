@@ -7,6 +7,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\AuthController;
 use App\Models\Wallet;
 use App\Models\User;
+use App\Models\Transaction;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
@@ -62,4 +63,13 @@ Route::post('/update-fcm', function (Request $request) {
         $user->save();
         return response()->json(['message' => 'Token updated']);
     }
+});
+
+Route::get('/admin-history', function () {
+    $history = Transaction::with(['wallet.user', 'admin']) // Load Rider (via wallet) and Admin info
+        ->latest()
+        ->limit(50)
+        ->get();
+
+    return response()->json($history);
 });
