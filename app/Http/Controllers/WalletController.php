@@ -151,6 +151,51 @@ class WalletController extends Controller
         });
     }
 
+    // 5. REFUND (Rider Quits -> Admin gives Cash back -> Rider Balance Decreases)
+    public function refundRider(Request $request)
+    {
+        return DB::transaction(function () use ($request) {
+            $riderWallet = Wallet::where('user_id', $request->rider_id)->first();
+            $adminWallet = Wallet::where('user_id', $request->admin_id)->first();
+
+            if (!$riderWallet) {
+                return response()->json(['error' => 'Rider wallet not found'], 404);
+            }
+            if (!$adminWallet) {
+                return response()->json(['error' => 'Admin wallet not found'], 404);
+            }
+
+            // 1. Validation: Can admin pay?
+            if ($adminWallet->cash_on_hand < $request->amount) {
+                return response()->json(['error' => 'Not enough Cash on Hand to refund this amount'], 400);
+            }
+
+            // 2. Validation: Does rider own this money?
+            if ($riderWallet->balance < $request->amount) {
+                return response()->json(['error' => 'Rider does not have enough balance'], 400);
+            }
+
+            // 3. Execution
+            // Rider loses digital balance (because they got cash)
+            $riderWallet->decrement('balance', $request->amount);
+            
+            // Admin loses physical cash (because they paid the rider)
+            $adminWallet->decrement('cash_on_hand', $request->amount);
+
+            // 4. Record Transaction
+            Transaction::create([
+                'wallet_id' => $riderWallet->id,
+                'admin_id' => $request->admin_id,
+                'amount' => -$request->amount, // Negative because wallet balance decreases
+                'balance_after' => $riderWallet->balance,
+                'type' => 'refund',
+                'description' => $request->reason ?? 'Rider Withdrawal'
+            ]);
+
+            return response()->json(['message' => 'Refund Successful']);
+        });
+    }
+
     // Helper: Create Wallet
     private function createEmptyWallet($userId) {
          return Wallet::create(['user_id' => $userId]);
@@ -168,4 +213,6 @@ class WalletController extends Controller
             }
         }
     }
+
+
 }

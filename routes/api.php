@@ -20,6 +20,7 @@ Route::post('/deduct', [WalletController::class, 'deductBalance']);
 Route::post('/create_rider', [UserController::class, 'createRider']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/withdraw', [WalletController::class, 'withdrawEarnings']);
+Route::post('/refund-rider', [WalletController::class, 'refundRider']);
 // In api.php
 
 // Add this line inside your routes
