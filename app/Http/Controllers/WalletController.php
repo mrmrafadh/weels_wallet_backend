@@ -70,7 +70,7 @@ class WalletController extends Controller
             ]);
 
             // Optional: Send Notification
-            $this->sendNotification($request->rider_id, 'Wallet Recharged 💰', "Your wallet has been recharged by \${$request->amount}. New Balance: \${$riderWallet->balance}");
+            //$this->sendNotification($request->rider_id, 'Wallet Recharged 💰', "Your wallet has been recharged by \${$request->amount}. New Balance: \${$riderWallet->balance}");
 
             return response()->json(['message' => 'Recharge Successful']);
         });
