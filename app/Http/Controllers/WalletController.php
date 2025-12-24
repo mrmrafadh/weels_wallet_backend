@@ -43,6 +43,7 @@ class WalletController extends Controller
     // 2. RECHARGE (Admin gets Cash -> Rider gets Balance)
     public function rechargeRider(Request $request)
     {
+        try{
         return DB::transaction(function () use ($request) {
             $riderWallet = Wallet::where('user_id', $request->rider_id)->first();
             $adminWallet = Wallet::where('user_id', $request->admin_id)->first();
@@ -70,10 +71,18 @@ class WalletController extends Controller
             ]);
 
             // Optional: Send Notification
-            //$this->sendNotification($request->rider_id, 'Wallet Recharged 💰', "Your wallet has been recharged by \${$request->amount}. New Balance: \${$riderWallet->balance}");
+            $this->sendNotification($request->rider_id, 'Wallet Recharged 💰', "Your wallet has been recharged by \${$request->amount}. New Balance: \${$riderWallet->balance}");
 
             return response()->json(['message' => 'Recharge Successful']);
         });
+    }catch (\Exception $e) {
+        // 3. FORCE JSON RESPONSE ON ERROR
+        // This will show the EXACT error in your Flutter SnackBar
+        return response()->json([
+            'error' => 'SERVER_CRASH', 
+            'message' => $e->getMessage() . " on line " . $e->getLine()
+        ], 500);
+    }
     }
 
     // 3. DEDUCT (Rider loses Balance -> Company Earns)
