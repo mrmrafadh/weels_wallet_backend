@@ -60,6 +60,7 @@ class WalletController extends Controller
                 'wallet_id' => $riderWallet->id,
                 'admin_id' => $request->admin_id,
                 'amount' => $request->amount,
+                'balance_after' => $riderWallet->balance,
                 'type' => 'recharge',
                 'description' => 'Cash Recharge'
             ]);
@@ -70,7 +71,12 @@ class WalletController extends Controller
 
     // 3. DEDUCT (Rider loses Balance -> Company Earns)
     public function deductBalance(Request $request)
-    {
+    {   
+        // 1. Update Wallet
+        $riderWallet->decrement('balance', $request->amount);
+        
+        // 2. Create Transaction with SNAPSHOT
+        
         return DB::transaction(function () use ($request) {
             $riderWallet = Wallet::where('user_id', $request->rider_id)->first();
             $adminWallet = Wallet::where('user_id', $request->admin_id)->first();
@@ -103,6 +109,7 @@ class WalletController extends Controller
                 'wallet_id' => $riderWallet->id,
                 'admin_id' => $request->admin_id,
                 'amount' => -$request->amount,
+                'balance_after' => $riderWallet->balance, // <--- SAVE NEW BALANCE HERE
                 'type' => 'deduction',
                 'description' => $request->reason ?? 'Admin Deduction'
             ]);
