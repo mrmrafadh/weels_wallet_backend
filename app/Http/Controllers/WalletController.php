@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Wallet;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Services\NotificationService; // Import Notification Service if you use it
+use App\Services\NotificationService; 
 
 class WalletController extends Controller
 {
@@ -51,18 +51,22 @@ class WalletController extends Controller
             if (!$adminWallet) $adminWallet = $this->createEmptyWallet($request->admin_id);
             if (!$riderWallet) $riderWallet = $this->createEmptyWallet($request->rider_id);
 
-            // Logic
+            // 1. Update Database
             $riderWallet->increment('balance', $request->amount);
             $adminWallet->increment('cash_on_hand', $request->amount);
 
-            // Record Transaction with SNAPSHOT
+            // 2. REFRESH VARIABLES (Crucial so rider snapshot is accurate)
+            $riderWallet->refresh(); 
+            // $adminWallet->refresh(); // Not strictly needed if not saving admin snapshot
+
+            // 3. Record Transaction
             Transaction::create([
                 'wallet_id' => $riderWallet->id,
                 'admin_id' => $request->admin_id,
                 'amount' => $request->amount,
-                'balance_after' => $riderWallet->balance, // <--- Correctly saves new balance
                 'type' => 'recharge',
-                'description' => $request->reason ?? 'Cash Recharge'
+                'description' => $request->reason ?? 'Cash Recharge',
+                'balance_after' => $riderWallet->balance, // Rider's New Balance
             ]);
 
             // Optional: Send Notification
@@ -75,8 +79,6 @@ class WalletController extends Controller
     // 3. DEDUCT (Rider loses Balance -> Company Earns)
     public function deductBalance(Request $request)
     {   
-        // ERROR FIXED: Removed the code that was here "outside" the transaction
-
         return DB::transaction(function () use ($request) {
             $riderWallet = Wallet::where('user_id', $request->rider_id)->first();
             $adminWallet = Wallet::where('user_id', $request->admin_id)->first();
@@ -87,7 +89,6 @@ class WalletController extends Controller
 
             // Check if balance is sufficient
             if ($riderWallet->balance < $request->amount) {
-                // If "force" is NOT true, stop and ask for confirmation
                 if (!$request->force) {
                     return response()->json([
                         'error' => 'CONFIRM_LOW_BALANCE',
@@ -98,18 +99,21 @@ class WalletController extends Controller
 
             if (!$adminWallet) $adminWallet = $this->createEmptyWallet($request->admin_id);
 
-            // Perform Update
+            // 1. Update Database
             $riderWallet->decrement('balance', $request->amount);
             $adminWallet->increment('earnings', $request->amount);
 
-            // Record Transaction with SNAPSHOT
+            // 2. REFRESH VARIABLES
+            $riderWallet->refresh();
+
+            // 3. Record Transaction
             Transaction::create([
                 'wallet_id' => $riderWallet->id,
                 'admin_id' => $request->admin_id,
                 'amount' => -$request->amount,
-                'balance_after' => $riderWallet->balance, // <--- Correctly saves new balance
                 'type' => 'deduction',
-                'description' => $request->reason ?? 'Admin Deduction'
+                'description' => $request->reason ?? 'Admin Deduction',
+                'balance_after' => $riderWallet->balance, // Rider's New Balance
             ]);
 
             // Optional: Send Notification
@@ -135,10 +139,14 @@ class WalletController extends Controller
                 return response()->json(['error' => 'Not enough physical cash in the box'], 400);
             }
 
+            // 1. Update Database
             $adminWallet->decrement('earnings', $request->amount);
             $adminWallet->decrement('cash_on_hand', $request->amount);
+            
+            // 2. REFRESH VARIABLES
+            $adminWallet->refresh();
 
-            // Record Transaction (No balance_after needed for admin withdrawal usually, or use earnings)
+            // 3. Record Transaction
             Transaction::create([
                 'wallet_id' => $adminWallet->id,
                 'admin_id' => $request->admin_id,
@@ -158,38 +166,32 @@ class WalletController extends Controller
             $riderWallet = Wallet::where('user_id', $request->rider_id)->first();
             $adminWallet = Wallet::where('user_id', $request->admin_id)->first();
 
-            if (!$riderWallet) {
-                return response()->json(['error' => 'Rider wallet not found'], 404);
-            }
-            if (!$adminWallet) {
-                return response()->json(['error' => 'Admin wallet not found'], 404);
-            }
+            if (!$riderWallet) return response()->json(['error' => 'Rider wallet not found'], 404);
+            if (!$adminWallet) return response()->json(['error' => 'Admin wallet not found'], 404);
 
-            // 1. Validation: Can admin pay?
+            // Validation
             if ($adminWallet->cash_on_hand < $request->amount) {
-                return response()->json(['error' => 'Not enough Cash on Hand to refund this amount'], 400);
+                return response()->json(['error' => 'Not enough Cash on Hand to refund'], 400);
             }
-
-            // 2. Validation: Does rider own this money?
             if ($riderWallet->balance < $request->amount) {
                 return response()->json(['error' => 'Rider does not have enough balance'], 400);
             }
 
-            // 3. Execution
-            // Rider loses digital balance (because they got cash)
+            // 1. Update Database
             $riderWallet->decrement('balance', $request->amount);
-            
-            // Admin loses physical cash (because they paid the rider)
             $adminWallet->decrement('cash_on_hand', $request->amount);
 
-            // 4. Record Transaction
+            // 2. REFRESH VARIABLES
+            $riderWallet->refresh();
+
+            // 3. Record Transaction
             Transaction::create([
                 'wallet_id' => $riderWallet->id,
                 'admin_id' => $request->admin_id,
-                'amount' => -$request->amount, // Negative because wallet balance decreases
-                'balance_after' => $riderWallet->balance,
+                'amount' => -$request->amount,
                 'type' => 'refund',
-                'description' => $request->reason ?? 'Rider Withdrawal'
+                'description' => $request->reason ?? 'Rider Withdrawal',
+                'balance_after' => $riderWallet->balance, // Rider's New Balance
             ]);
 
             return response()->json(['message' => 'Refund Successful']);
@@ -198,21 +200,17 @@ class WalletController extends Controller
 
     // Helper: Create Wallet
     private function createEmptyWallet($userId) {
-         return Wallet::create(['user_id' => $userId]);
+         return Wallet::create(['user_id' => $userId, 'balance' => 0, 'cash_on_hand' => 0, 'earnings' => 0]);
     }
 
-    // Helper: Send Notification (Safe wrapper)
+    // Helper: Send Notification
     private function sendNotification($userId, $title, $body) {
         $user = User::find($userId);
         if ($user && $user->fcm_token) {
             try {
                 $notify = new \App\Services\NotificationService();
                 $notify->send($user->fcm_token, $title, $body);
-            } catch (\Exception $e) {
-                // Ignore notification errors so transaction doesn't fail
-            }
+            } catch (\Exception $e) { }
         }
     }
-
-
 }
