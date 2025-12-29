@@ -8,6 +8,9 @@ use App\Http\Controllers\AuthController;
 use App\Models\Wallet;
 use App\Models\User;
 use App\Models\Transaction;
+use App\Http\Controllers\DailyDeliveryController;
+
+
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
@@ -21,6 +24,12 @@ Route::post('/create_rider', [UserController::class, 'createRider']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/withdraw', [WalletController::class, 'withdrawEarnings']);
 Route::post('/refund-rider', [WalletController::class, 'refundRider']);
+Route::post('/submit-daily-sheet', [DailyDeliveryController::class, 'submitDailySheet']);
+Route::get('/rider-history/{id}', [DailyDeliveryController::class, 'getRiderHistory']);
+Route::post('/get-daily-sheet', [DailyDeliveryController::class, 'getDailySheet']);
+Route::get('/pending-sheets', [DailyDeliveryController::class, 'getPendingSheets']);
+Route::post('/approve-sheet', [DailyDeliveryController::class, 'approveSheet']);
+Route::get('/daily-status-report', [DailyDeliveryController::class, 'getDailyStatusReport']);
 // In api.php
 
 // Add this line inside your routes
