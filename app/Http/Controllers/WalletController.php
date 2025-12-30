@@ -58,7 +58,7 @@ class WalletController extends Controller
 
             // 2. REFRESH VARIABLES (Crucial so rider snapshot is accurate)
             $riderWallet->refresh(); 
-            // $adminWallet->refresh(); // Not strictly needed if not saving admin snapshot
+            $adminWallet->refresh(); // Not strictly needed if not saving admin snapshot
 
             // 3. Record Transaction
             Transaction::create([
@@ -68,6 +68,16 @@ class WalletController extends Controller
                 'type' => 'recharge',
                 'description' => $request->reason ?? 'Cash Recharge',
                 'balance_after' => $riderWallet->balance, // Rider's New Balance
+            ]);
+
+            // 3. CREATE ADMIN MIRROR TRANSACTION (New!)
+            Transaction::create([
+                'wallet_id' => $adminWallet->id, // <--- Link to Admin Wallet
+                'admin_id' => $request->admin_id,
+                'amount' => $request->amount, // Positive (Cash Received)
+                'type' => 'recharge_collected', // Unique type for admin
+                'description' => "Received Cash from Rider: " . $riderWallet->user->name,
+                'balance_after' => $adminWallet->cash_on_hand, // Track Cash on Hand
             ]);
 
             // Optional: Send Notification
@@ -114,6 +124,7 @@ class WalletController extends Controller
 
             // 2. REFRESH VARIABLES
             $riderWallet->refresh();
+            $adminWallet->refresh();
 
             // 3. Record Transaction
             Transaction::create([
@@ -123,6 +134,15 @@ class WalletController extends Controller
                 'type' => 'deduction',
                 'description' => $request->reason ?? 'Admin Deduction',
                 'balance_after' => $riderWallet->balance, // Rider's New Balance
+            ]);
+
+            Transaction::create([
+                'wallet_id' => $adminWallet->id, // <--- Link to Admin
+                'admin_id' => $request->admin_id,
+                'amount' => $request->amount, // Positive (Earnings Gained)
+                'type' => 'service_fee',
+                'description' => "Fee Deducted from " . $riderWallet->user->name,
+                'balance_after' => $adminWallet->earnings, // Track Earnings
             ]);
 
             // Optional: Send Notification
@@ -192,6 +212,7 @@ class WalletController extends Controller
 
             // 2. REFRESH VARIABLES
             $riderWallet->refresh();
+            $adminWallet->refresh();
 
             // 3. Record Transaction
             Transaction::create([
@@ -201,6 +222,16 @@ class WalletController extends Controller
                 'type' => 'refund',
                 'description' => $request->reason ?? 'Rider Withdrawal',
                 'balance_after' => $riderWallet->balance, // Rider's New Balance
+            ]);
+
+            // 2. ADMIN RECORD (New!)
+            Transaction::create([
+                'wallet_id' => $adminWallet->id, // <--- Link to Admin
+                'admin_id' => $request->admin_id,
+                'amount' => -$request->amount, // Negative (Cash Paid Out)
+                'type' => 'refund_payout',
+                'description' => "Refunded Cash to " . $riderWallet->user->name,
+                'balance_after' => $adminWallet->cash_on_hand,
             ]);
 
             return response()->json(['message' => 'Refund Successful']);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\DailyDelivery;
 use Illuminate\Support\Facades\DB;
+use App\Models\User;
 
 class DailyDeliveryController extends Controller
 {
@@ -23,7 +24,7 @@ class DailyDeliveryController extends Controller
         $totalDeliveryFee = 0;
         $totalRestaurantComm = 0;
         $totalSvc = 0;
-        
+
         $totalAdminCommDelivery = 0;
         $totalAdminCommSvc = 0;
 
@@ -44,7 +45,7 @@ class DailyDeliveryController extends Controller
             elseif ($svc == 80) $adminSvc = 25.0;
             elseif ($svc == 120) $adminSvc = 60.0;
             elseif ($svc == 180) $adminSvc = 100.0;
-            
+
             // Accumulate Totals
             $totalDeliveryFee += $fee;
             $totalRestaurantComm += $comm;
@@ -63,15 +64,15 @@ class DailyDeliveryController extends Controller
         }
 
         // 3. Final Calculations
-        
+
         // UPDATE: Admin Commission = (Admin Share of Fee) + (Admin Share of SVC) + (Full Restaurant Comm)
         $totalAdminCommission = $totalAdminCommDelivery + $totalAdminCommSvc + $totalRestaurantComm;
-        
+
         // Rider Earnings = (Fee - AdminFee) + (Svc - AdminSvc)
         // Note: We do NOT subtract Restaurant Comm here because the rider never "owned" that money.
         $riderActualEarnings = ($totalDeliveryFee - $totalAdminCommDelivery) + ($totalSvc - $totalAdminCommSvc);
 
-        $grossEarnings = $totalDeliveryFee + $totalSvc + $totalRestaurantComm; 
+        $grossEarnings = $totalDeliveryFee + $totalSvc + $totalRestaurantComm;
 
         // 4. Save to Database
         $dailySheet = DailyDelivery::updateOrCreate(
@@ -133,7 +134,7 @@ class DailyDeliveryController extends Controller
                     ->with('rider:id,name,mobile') // Get Rider Name
                     ->orderBy('delivery_date', 'asc')
                     ->get();
-                    
+
         return response()->json($sheets);
     }
 
@@ -156,7 +157,7 @@ class DailyDeliveryController extends Controller
             $amountToDeduct = $sheet->admin_commission;
 
             $riderWallet = \App\Models\Wallet::where('user_id', $sheet->rider_id)->first();
-            
+
             if (!$riderWallet) {
                 // Should not happen, but auto-create if missing to avoid crash
                 $riderWallet = \App\Models\Wallet::create(['user_id' => $sheet->rider_id]);
@@ -164,22 +165,35 @@ class DailyDeliveryController extends Controller
 
             // Perform Deduction
             $riderWallet->decrement('balance', $amountToDeduct);
-            
+
             // 2. UPDATE ADMIN WALLET (Earnings)
             // Assuming Admin ID 1 is the super admin/company
-            $adminWallet = \App\Models\Wallet::where('user_id', 2)->first(); 
+            $adminWallet = \App\Models\Wallet::where('user_id', 2)->first();
             if ($adminWallet) {
                 $adminWallet->increment('earnings', $amountToDeduct);
             }
 
+            $riderWallet->refresh();
+            $adminWallet->refresh();
+
             // 3. RECORD TRANSACTION
             \App\Models\Transaction::create([
                 'wallet_id' => $riderWallet->id,
-                'admin_id' => 1, // System Admin
+                'admin_id' => 2, // System Admin
                 'amount' => -$amountToDeduct, // Negative because it's a deduction
                 'type' => 'deduction',
                 'description' => "Daily Sheet Approval: " . $sheet->delivery_date->format('Y-m-d'),
                 'balance_after' => $riderWallet->balance
+            ]);
+
+            // 3. ADMIN TRANSACTION (New!)
+            \App\Models\Transaction::create([
+                'wallet_id' => $adminWallet->id, // <--- Link to Admin
+                'admin_id' => 1,
+                'amount' => $amountToDeduct, // Positive (Earnings)
+                'type' => 'sheet_earnings',
+                'description' => "Earnings from " . $sheet->rider->name . " (" . $sheet->delivery_date->format('M d') . ")",
+                'balance_after' => $adminWallet->earnings
             ]);
 
             // 4. MARK SHEET AS APPROVED
@@ -196,7 +210,7 @@ class DailyDeliveryController extends Controller
         $request->validate(['date' => 'required|date']);
 
         // A. Get all users who are riders
-        $riders = \App\Models\User::where('role', 'rider')->get(['id', 'name']);
+        $riders = User::where('role', 'rider')->get(['id', 'name']);
 
         // B. Get all sheets for the specific date
         $sheets = DailyDelivery::where('delivery_date', $request->date)
@@ -206,7 +220,7 @@ class DailyDeliveryController extends Controller
         // C. Merge them to create the report
         $report = $riders->map(function($rider) use ($sheets) {
             $sheet = $sheets->get($rider->id);
-            
+
             // Determine Status
             $status = 'missing';
             $sheetData = null;
@@ -215,7 +229,7 @@ class DailyDeliveryController extends Controller
                 $status = $sheet->status; // 'pending' or 'approved'
                 $sheetData = $sheet;
                 // Append rider info to sheet data so SheetDetailScreen works
-                $sheetData['rider'] = $rider; 
+                $sheetData['rider'] = $rider;
             }
 
             return [
