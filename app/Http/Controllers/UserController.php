@@ -48,4 +48,47 @@ class UserController extends Controller
             ]);
         });
     }
+
+    public function editUserProf(Request $request)
+    {
+        // 1. Validate Input
+        $request->validate([
+            // Check if this ID exists in the DB
+            'id' => 'required|exists:users,id', 
+            
+            'name' => 'required|string',
+            
+            // IGNORE the current user's ID when checking for unique mobile
+            'mobile' => 'required|unique:users,mobile,' . $request->id,
+            
+            // Optional: Handle email similarly
+            'email' => 'nullable|email|unique:users,email,' . $request->id, 
+            
+            // Optional: Validate password only if provided
+            'password' => 'nullable'
+        ]);
+
+        return DB::transaction(function () use ($request) {
+            
+            // 2. Find the existing user
+            // findOrFail throws a 404 error automatically if not found
+            $rider = User::findOrFail($request->id);
+
+            // 3. Prepare Data safely (Whitelist approach)
+            $updateData = $request->only(['name', 'mobile', 'email']);
+
+            // 4. Handle Password Securely (Only update if user sent a new one)
+            if ($request->filled('password')) {
+                $updateData['password'] = Hash::make($request->password);
+            }
+
+            // 5. Update the User
+            $rider->update($updateData);
+
+            return response()->json([
+                'message' => 'Profile updated successfully',
+                'rider' => $rider
+            ]);
+        });
+    }
 }

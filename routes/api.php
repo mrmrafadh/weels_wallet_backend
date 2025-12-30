@@ -30,6 +30,7 @@ Route::post('/get-daily-sheet', [DailyDeliveryController::class, 'getDailySheet'
 Route::get('/pending-sheets', [DailyDeliveryController::class, 'getPendingSheets']);
 Route::post('/approve-sheet', [DailyDeliveryController::class, 'approveSheet']);
 Route::get('/daily-status-report', [DailyDeliveryController::class, 'getDailyStatusReport']);
+Route::post('/edit-profile', [UserController::class, 'editUserProf']);
 // In api.php
 
 // Add this line inside your routes
