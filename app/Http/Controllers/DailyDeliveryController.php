@@ -35,7 +35,7 @@ class DailyDeliveryController extends Controller
             $comm = (float)$record['comm'];
             $svc = (float)$record['svc'];
 
-            // A. Admin Share from Delivery Fee (Rule: <=300 is 10, else 10%)
+            // A. Admin Share from Delivery Fee (Rule: <300 is 10, else 10%)
             $adminFee = ($fee < 300) ? 10.0 : ($fee * 0.10);
 
             // B. Admin Share from SVC (Rule: Fixed Tiers)
@@ -167,7 +167,7 @@ class DailyDeliveryController extends Controller
             
             // 2. UPDATE ADMIN WALLET (Earnings)
             // Assuming Admin ID 1 is the super admin/company
-            $adminWallet = \App\Models\Wallet::where('user_id', 1)->first(); 
+            $adminWallet = \App\Models\Wallet::where('user_id', 2)->first(); 
             if ($adminWallet) {
                 $adminWallet->increment('earnings', $amountToDeduct);
             }

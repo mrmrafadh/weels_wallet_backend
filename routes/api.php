@@ -59,7 +59,7 @@ Route::get('/negative-wallets', function () {
         ->whereHas('user', function ($query) {
             // This filters the related 'users' table
             $query->where('role', 'rider');
-        })
+        })  
         ->with('user') // This loads the user data so you can see names/mobiles
         ->get();
         
