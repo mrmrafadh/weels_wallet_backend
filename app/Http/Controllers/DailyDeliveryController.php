@@ -11,6 +11,7 @@ class DailyDeliveryController extends Controller
 {
     public function submitDailySheet(Request $request)
     {
+        // 1. Validate Input
         $request->validate([
             'rider_id' => 'required|exists:users,id',
             'date' => 'required|date',
@@ -20,7 +21,20 @@ class DailyDeliveryController extends Controller
             'records.*.svc' => 'required|numeric|min:0',
         ]);
 
-        // 1. Initialize Totals
+        // --- SAFETY CHECK: PREVENT EDITING APPROVED SHEETS ---
+        $existingSheet = DailyDelivery::where('rider_id', $request->rider_id)
+            ->where('delivery_date', $request->date)
+            ->first();
+
+        if ($existingSheet && $existingSheet->status === 'approved') {
+            return response()->json([
+                'error' => 'LOCKED',
+                'message' => 'This daily sheet has already been approved by admin and cannot be edited.'
+            ], 403); // 403 Forbidden
+        }
+        // -----------------------------------------------------
+
+        // 2. Initialize Totals
         $totalDeliveryFee = 0;
         $totalRestaurantComm = 0;
         $totalSvc = 0;
@@ -30,7 +44,7 @@ class DailyDeliveryController extends Controller
 
         $processedRecords = [];
 
-        // 2. Loop and Calculate
+        // 3. Loop and Calculate
         foreach ($request->records as $record) {
             $fee = (float)$record['fee'];
             $comm = (float)$record['comm'];
@@ -63,18 +77,15 @@ class DailyDeliveryController extends Controller
             ];
         }
 
-        // 3. Final Calculations
-
-        // UPDATE: Admin Commission = (Admin Share of Fee) + (Admin Share of SVC) + (Full Restaurant Comm)
+        // 4. Final Calculations
         $totalAdminCommission = $totalAdminCommDelivery + $totalAdminCommSvc + $totalRestaurantComm;
 
-        // Rider Earnings = (Fee - AdminFee) + (Svc - AdminSvc)
-        // Note: We do NOT subtract Restaurant Comm here because the rider never "owned" that money.
+        // Rider Earnings logic
         $riderActualEarnings = ($totalDeliveryFee - $totalAdminCommDelivery) + ($totalSvc - $totalAdminCommSvc);
 
         $grossEarnings = $totalDeliveryFee + $totalSvc + $totalRestaurantComm;
 
-        // 4. Save to Database
+        // 5. Save to Database
         $dailySheet = DailyDelivery::updateOrCreate(
             [
                 'rider_id' => $request->rider_id,
@@ -87,11 +98,11 @@ class DailyDeliveryController extends Controller
                 'total_svc' => $totalSvc,
                 'admin_comm_delivery' => $totalAdminCommDelivery,
                 'admin_comm_svc' => $totalAdminCommSvc,
-                'admin_comm_restaurantcomm' => $totalRestaurantComm, // Saved for record keeping
+                'admin_comm_restaurantcomm' => $totalRestaurantComm,
                 'total_earnings' => $grossEarnings,
-                'admin_commission' => $totalAdminCommission, // <--- Now includes Rest. Comm
+                'admin_commission' => $totalAdminCommission,
                 'actual_earnings' => $riderActualEarnings,
-                'status' => 'pending'
+                'status' => 'pending' // If it wasn't approved, we reset/keep it as pending
             ]
         );
 
