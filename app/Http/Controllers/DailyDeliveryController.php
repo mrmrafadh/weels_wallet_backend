@@ -178,7 +178,7 @@ class DailyDeliveryController extends Controller
             $riderWallet->decrement('balance', $amountToDeduct);
 
             // 2. UPDATE ADMIN WALLET (Earnings)
-            // Assuming Admin ID 1 is the super admin/company
+            
             $adminWallet = \App\Models\Wallet::where('user_id', 2)->first();
             if ($adminWallet) {
                 $adminWallet->increment('earnings', $amountToDeduct);
@@ -200,7 +200,7 @@ class DailyDeliveryController extends Controller
             // 3. ADMIN TRANSACTION (New!)
             \App\Models\Transaction::create([
                 'wallet_id' => $adminWallet->id, // <--- Link to Admin
-                'admin_id' => 1,
+                'admin_id' => 2,
                 'amount' => $amountToDeduct, // Positive (Earnings)
                 'type' => 'sheet_earnings',
                 'description' => "Earnings from " . $sheet->rider->name . " (" . $sheet->delivery_date->format('M d') . ")",
